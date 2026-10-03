@@ -1,0 +1,21 @@
+{
+  "name": "paystream-wallet-api",
+  "version": "1.0.0",
+  "description": "Paystream cross-border wallet API (backend tier)",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test",
+    "lint": "node --check server.js && node --check lib/money.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.11.5",
+    "redis": "^4.6.13"
+  },
+  "license": "UNLICENSED"
+}

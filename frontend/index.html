@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Paystream — Wallet</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <!-- top bar -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">P</span>
+      <div>
+        <div class="brand-name">Paystream</div>
+        <div class="brand-tag">Cross-border wallet · Kenya</div>
+      </div>
+    </div>
+    <div id="sysStatus" class="status-pill status-unknown" title="API health">
+      <span class="dot"></span><span id="sysStatusText">checking…</span>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- wallet picker -->
+    <section class="picker">
+      <label for="walletSelect">Wallet</label>
+      <select id="walletSelect"></select>
+    </section>
+
+    <div class="grid">
+      <!-- balance hero -->
+      <section class="card hero" id="balanceCard">
+        <div class="hero-top">
+          <span class="muted" id="heroOwner">—</span>
+          <span id="sourceBadge" class="badge badge-db" title="Where this read came from">—</span>
+        </div>
+        <div class="balance">
+          <span class="currency" id="heroCurrency">—</span>
+          <span class="amount" id="heroAmount">0.00</span>
+        </div>
+        <div class="hero-foot">
+          <span class="muted" id="heroLabel">—</span>
+          <button id="refreshBtn" class="ghost">↻ Refresh balance</button>
+        </div>
+        <p class="hint" id="cacheHint">The first read comes from the <b>database</b>. Read it again within 60s and it comes from the <b>cache</b>.</p>
+      </section>
+
+      <!-- send money -->
+      <section class="card">
+        <h2>Send money</h2>
+        <form id="sendForm" class="send-form">
+          <label>To wallet
+            <select id="toSelect"></select>
+          </label>
+          <label>Amount
+            <div class="amount-input">
+              <span id="fromCurrency" class="prefix">—</span>
+              <input id="amountInput" type="number" min="0.01" step="0.01" placeholder="0.00" />
+            </div>
+          </label>
+          <div class="quote" id="quoteBox">
+            <div><span>Fee (1.4%)</span><b id="quoteFee">—</b></div>
+            <div><span>Recipient gets</span><b id="quoteCredited">—</b></div>
+          </div>
+          <button type="submit" id="sendBtn">Send transfer</button>
+          <p class="form-msg" id="sendMsg"></p>
+        </form>
+      </section>
+
+      <!-- transfer history -->
+      <section class="card wide">
+        <h2>Recent transfers</h2>
+        <div class="table-wrap">
+          <table id="historyTable">
+            <thead>
+              <tr><th>When</th><th>From</th><th>To</th><th>Sent</th><th>Fee</th><th>Credited</th><th>Status</th></tr>
+            </thead>
+            <tbody id="historyBody"><tr><td colspan="7" class="muted">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- fx rates -->
+      <section class="card">
+        <h2>FX rates <span id="ratesSource" class="badge badge-db small">—</span></h2>
+        <ul class="rates" id="ratesList"></ul>
+      </section>
+
+      <!-- metrics -->
+      <section class="card">
+        <h2>Platform</h2>
+        <div class="metrics" id="metrics">
+          <div><span class="metric-num" id="mWallets">—</span><span class="muted">wallets</span></div>
+          <div><span class="metric-num" id="mTransfers">—</span><span class="muted">transfers</span></div>
+          <div><span class="metric-num" id="mVolume">—</span><span class="muted">volume (NGN)</span></div>
+          <div><span class="metric-num" id="mFees">—</span><span class="muted">fees (NGN)</span></div>
+        </div>
+      </section>
+    </div>
+
+    <footer class="foot muted">
+      Paystream demo app · frontend (Nginx) → API (Node) → PostgreSQL + Redis ·
+      API base: <code id="apiBase"></code>
+    </footer>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

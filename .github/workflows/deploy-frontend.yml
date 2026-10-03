@@ -1,0 +1,48 @@
+name: deploy-frontend
+
+# Zips the static frontend, copies it to the EC2 box, and drops it into the
+# Nginx web root. Nginx serves it and proxies /api/ to the Node backend.
+#
+# Uses the same secrets as deploy-backend: EC2_HOST, EC2_USER, EC2_SSH_KEY.
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'frontend/**'
+      - 'deploy/deploy-frontend-remote.sh'
+      - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build artifact (zip)
+        working-directory: frontend
+        run: |
+          zip -rq ../frontend.zip .
+          echo "artifact size: $(du -h ../frontend.zip | cut -f1)"
+
+      - name: Upload the artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-release
+          path: frontend.zip
+
+      - name: Ship to EC2 and reload Nginx
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          echo "$EC2_SSH_KEY" > key.pem && chmod 600 key.pem
+          SSH="ssh -i key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST"
+          SCP="scp -i key.pem -o StrictHostKeyChecking=no"
+
+          $SCP frontend.zip "$EC2_USER@$EC2_HOST:/tmp/frontend.zip"
+          $SCP deploy/deploy-frontend-remote.sh "$EC2_USER@$EC2_HOST:/tmp/deploy-frontend-remote.sh"
+          $SSH "bash /tmp/deploy-frontend-remote.sh"
+
+          rm -f key.pem

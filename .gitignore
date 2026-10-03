@@ -1,0 +1,16 @@
+# dependencies (installed with `npm ci`, and bundled into the deploy artifact)
+node_modules/
+
+# local environment and secrets
+.env
+.env.local
+config.local.js
+*.pem
+key.pem
+
+# build artifacts
+*.zip
+_preview/
+
+# os noise
+.DS_Store
