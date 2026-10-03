@@ -47,15 +47,27 @@ sudo cp deploy/paystream-api.service /etc/systemd/system/paystream-api.service
 sudo systemctl daemon-reload
 sudo systemctl enable paystream-api   # it starts for real once a release is deployed
 
-echo "==> 6/6 Configuring Nginx"
+echo "==> 6/7 Configuring Nginx"
 sudo cp deploy/nginx-paystream.conf /etc/nginx/sites-available/paystream
 sudo ln -sfn /etc/nginx/sites-available/paystream /etc/nginx/sites-enabled/paystream
 sudo rm -f /etc/nginx/sites-enabled/default
+
+echo "==> 7/7 Seeding the frontend so the site works before the first deploy"
+# Without this the web root is empty and Nginx returns 403 until a deploy runs.
+# We copy the static files straight from this checkout; later deploys replace them.
+sudo rm -rf /var/www/paystream/*
+sudo cp -r frontend/. /var/www/paystream/
+# dev-only helpers must not be served in production (the site uses the /api proxy)
+sudo rm -f /var/www/paystream/dev-server.js /var/www/paystream/config.local.js
+sudo chown -R www-data:www-data /var/www/paystream
+sudo find /var/www/paystream -type d -exec chmod 755 {} \;
+sudo find /var/www/paystream -type f -exec chmod 644 {} \;
 sudo nginx -t && sudo systemctl reload nginx
 
 echo ""
 echo "Bootstrap complete."
 echo "  data tier : postgres + redis  (Docker containers)"
 echo "  app tier  : backend + frontend (native: systemd + Nginx)"
-echo "Now push to main (or run the deploy workflows) to ship the app."
-echo "The site will be at  http://<this-instance-public-ip>/"
+echo "The site is ALREADY LIVE at  http://<this-instance-public-ip>/  (seeded frontend)."
+echo "The backend starts once you deploy a release (push to main, or run the workflows)."
+echo "Until then the page loads but shows 'API unreachable' -- that is expected."
