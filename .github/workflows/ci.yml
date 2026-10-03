@@ -1,0 +1,21 @@
+name: CI
+ 
+on:
+  pull_request:         # run on every PR aimed at...
+    branches: [ main ]  # ...the main branch
+ 
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend   # package.json lives here
+    steps:
+      - uses: actions/checkout@v4     # clone the repo onto the runner
+      - uses: actions/setup-node@v4   # put Node 20 on the runner
+        with:
+          node-version: 20
+      - run: npm ci                   # install EXACTLY the locked versions
+      - run: npm run lint             # node --check: does it even parse?
+      - run: npm test                 # the money-logic tests
+
