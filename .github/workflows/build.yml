@@ -1,0 +1,40 @@
+name: Build artifacts
+ 
+on:
+  push:
+    branches: [ main ]
+ 
+jobs:
+  build-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install PRODUCTION deps only
+        working-directory: backend
+        run: npm ci --omit=dev          # no test tooling, smaller artifact
+      - name: Zip the backend
+        run: |
+          cd backend
+          zip -rq ../backend.zip . -x '*.env' 'tests/*'
+      - name: Upload the artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend
+          path: backend.zip
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Zip the frontend
+        run: |
+          cd frontend
+          zip -rq ../frontend.zip . -x 'dev-server.js' 'config.local.js'
+      - name: Upload the artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend
+          path: frontend.zip
+
