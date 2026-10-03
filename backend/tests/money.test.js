@@ -5,7 +5,7 @@ const assert = require("node:assert");
 const { feeFor, convert, quote } = require("../lib/money");
 
 test("fee is 1.4% of the amount, rounded to minor units", () => {
-  assert.strictEqual(feeFor(5000000), 9999);   // 50,000.00 -> 700.00 fee
+  assert.strictEqual(feeFor(5000000), 70000);   // 50,000.00 -> 700.00 fee
   assert.strictEqual(feeFor(100), 1);            // rounds
 });
 
