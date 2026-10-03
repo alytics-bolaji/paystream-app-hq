@@ -1,0 +1,70 @@
+name: deploy-backend
+
+# Builds a self-contained zip artifact (app + production node_modules), copies
+# it to the EC2 box over SSH, drops it in a new release folder, and restarts
+# the systemd service. No Docker -- that arrives in Week 10.
+#
+# Required repo secrets:
+#   EC2_HOST     public DNS or IP of the instance
+#   EC2_USER     ssh user (e.g. "ubuntu")
+#   EC2_SSH_KEY  the PRIVATE key that matches the instance's key pair
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - 'deploy/paystream-api.service'
+      - 'deploy/deploy-backend-remote.sh'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:   # lets you run a deploy by hand from the Actions tab
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # gate: install everything and run the tests before we ship anything
+      - name: Install and test
+        working-directory: backend
+        run: |
+          npm ci
+          npm test
+
+      # build the artifact: production deps only, zipped (no dev deps, no tests)
+      - name: Build release artifact (zip)
+        working-directory: backend
+        run: |
+          rm -rf node_modules
+          npm ci --omit=dev
+          zip -rq ../backend.zip . -x 'tests/*' '.env'
+          echo "artifact size: $(du -h ../backend.zip | cut -f1)"
+
+      # keep a copy visible in the Actions run ("produces an artifact")
+      - name: Upload the artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-release
+          path: backend.zip
+
+      # copy it to the box and run the remote deploy script
+      - name: Ship to EC2 and restart
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          echo "$EC2_SSH_KEY" > key.pem && chmod 600 key.pem
+          RELEASE="${GITHUB_SHA::7}-$(date +%s)"
+          SSH="ssh -i key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST"
+          SCP="scp -i key.pem -o StrictHostKeyChecking=no"
+
+          $SCP backend.zip "$EC2_USER@$EC2_HOST:/tmp/backend.zip"
+          $SCP deploy/deploy-backend-remote.sh "$EC2_USER@$EC2_HOST:/tmp/deploy-backend-remote.sh"
+          $SSH "bash /tmp/deploy-backend-remote.sh $RELEASE"
+
+          rm -f key.pem

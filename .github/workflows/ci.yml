@@ -1,23 +1,21 @@
-name: ci
-
-# The quality gate. Runs on every pull request (make it a required check in
-# the branch ruleset, as in Week 8) and on pushes to main.
+name: CI
+ 
 on:
-  pull_request:
-  push:
-    branches: [ main ]
-
+  pull_request:         # run on every PR aimed at...
+    branches: [ main ]  # ...the main branch
+ 
 jobs:
-  backend:
+  test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend   # package.json lives here
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v4     # clone the repo onto the runner
+      - uses: actions/setup-node@v4   # put Node 20 on the runner
         with:
           node-version: 20
-      - name: Install, lint and test the backend
-        working-directory: backend
-        run: |
-          npm ci
-          npm run lint
-          npm test
+      - run: npm ci                   # install EXACTLY the locked versions
+      - run: npm run lint             # node --check: does it even parse?
+      - run: npm test                 # the money-logic tests
+

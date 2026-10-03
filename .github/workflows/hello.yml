@@ -1,0 +1,15 @@
+name: Hello pipeline
+ 
+on: [push]            # the EVENT that triggers this workflow
+ 
+jobs:
+  greet:              # one JOB, named 'greet'
+    runs-on: ubuntu-latest   # the RUNNER: a fresh Ubuntu VM, free
+    steps:
+      - name: Say hello
+        run: echo "Pipeline running for Paystream"
+      - name: Show where we are
+        run: |
+          pwd
+          echo "Runner OS: $RUNNER_OS"
+
