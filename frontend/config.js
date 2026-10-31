@@ -1,22 +1,16 @@
 // config.js -- where the frontend finds the API.
 //
-// In PRODUCTION the page is served by Nginx (port 80/443) which proxies
-// /api/ to the Node backend on the same host, so a relative "/api" base
-// is correct and same-origin.
+// The app is ALWAYS served behind a proxy that forwards /api to the backend,
+// so a relative "/api" base is correct everywhere and the frontend and API are
+// the same origin (no CORS, and the backend needs no published port):
 //
-// In LOCAL DEV you open the page from a static server on some other port
-// (e.g. http://localhost:8080). That server does NOT proxy /api, so we talk
-// to the backend directly on http://localhost:3000 (the API allows CORS).
+//   * in a container : Nginx in the frontend image proxies /api -> paystream-api:3000
+//   * on EC2         : Nginx proxies /api -> 127.0.0.1:3000
+//   * local dev      : run `node dev-server.js`, which proxies /api -> localhost:3000
 //
-// You can always override explicitly by setting window.PAYSTREAM_API before
-// this file loads (see config.local.js).
-window.PAYSTREAM_API = window.PAYSTREAM_API || (function () {
-  var l = window.location;
-  var host = l.hostname;
-  var isLocalHost = host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
-  var onProxyPort = l.port === "" || l.port === "80" || l.port === "443";
-  // local machine, served on a dev port -> go straight to the backend
-  if (isLocalHost && !onProxyPort) return "http://localhost:3000";
-  // otherwise (production behind Nginx) use the /api reverse-proxy path
-  return "/api";
-})();
+// A bare static server such as `python -m http.server` does NOT proxy /api and
+// is not supported for this app -- use dev-server.js for local development.
+//
+// You can still override explicitly by setting window.PAYSTREAM_API before this
+// file loads.
+window.PAYSTREAM_API = window.PAYSTREAM_API || "/api";

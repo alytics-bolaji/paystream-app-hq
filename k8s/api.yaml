@@ -1,0 +1,64 @@
+# The Paystream wallet API as a Deployment (2 replicas) + Service.
+# The image is built locally and loaded into minikube:
+#   docker build -t paystream-backend:v2 ./backend
+#   minikube image load paystream-backend:v2
+# imagePullPolicy: IfNotPresent tells Kubernetes to use that loaded image
+# instead of trying to pull it from a registry.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paystream-api
+  labels:
+    app: paystream-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: paystream-api
+  template:
+    metadata:
+      labels:
+        app: paystream-api
+    spec:
+      containers:
+        - name: api
+          image: paystream-backend:v2
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "3000"
+            # service names are DNS names in the cluster, so the data tier is
+            # reached at paystream-postgres / paystream-redis, not localhost.
+            - name: DATABASE_URL
+              value: postgres://paystream:paystream@paystream-postgres:5432/paystream
+            - name: REDIS_URL
+              value: redis://paystream-redis:6379
+            - name: CACHE_TTL
+              value: "60"
+            - name: CORS_ORIGIN
+              value: "*"
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: paystream-api
+spec:
+  selector:
+    app: paystream-api
+  ports:
+    - port: 3000
+      targetPort: 3000

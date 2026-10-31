@@ -1,0 +1,76 @@
+# compose.yaml -- the whole of Paystream as one stack.
+#
+# Bring it all up:        docker compose up --build        (add -d for background)
+# Take it all down:       docker compose down              (add -v to drop the volume)
+# Pull published images:  docker compose pull              (on a fresh machine)
+#
+# Service NAMES are hostnames on the compose network, so the API reaches the
+# database at paystream-postgres and the cache at paystream-redis, and the
+# frontend's nginx.conf proxies /api to paystream-api -- no localhost anywhere.
+name: paystream
+
+services:
+  paystream-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: paystream
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-paystream}
+      POSTGRES_DB: paystream
+    volumes:
+      - paystream-pgdata:/var/lib/postgresql/data
+      # schema + seed load automatically on FIRST start (empty volume only):
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paystream"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  paystream-redis:
+    image: redis:7
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  paystream-api:
+    build: ./backend
+    # the name this image is published under on Docker Hub (see .env.example):
+    image: ${DOCKERHUB_USER:-youruser}/paystream-backend:${TAG:-latest}
+    #image: paystream-backend:v2
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgres://paystream:${POSTGRES_PASSWORD:-paystream}@paystream-postgres:5432/paystream
+      REDIS_URL: redis://paystream-redis:6379
+      CACHE_TTL: 60
+      CORS_ORIGIN: "*"
+    depends_on:
+      paystream-postgres:
+        condition: service_healthy
+      paystream-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+
+  paystream-web:
+    build: ./frontend
+    image: ${DOCKERHUB_USER:-youruser}/paystream-frontend:${TAG:-latest}
+    #image: paystream-frontend:v2
+    ports:
+      - "8080:80"
+    depends_on:
+      paystream-api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  paystream-pgdata:
