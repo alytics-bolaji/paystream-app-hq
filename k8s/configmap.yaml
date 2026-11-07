@@ -1,0 +1,14 @@
+# ConfigMap: the NON-secret configuration, separated from the images and pods.
+# Change a value here and re-apply, and you reconfigure the app without
+# rebuilding any image.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: paystream-config
+data:
+  POSTGRES_USER: paystream
+  POSTGRES_DB: paystream
+  PORT: "3000"
+  REDIS_URL: redis://paystream-redis:6379
+  CACHE_TTL: "60"
+  CORS_ORIGIN: "*"

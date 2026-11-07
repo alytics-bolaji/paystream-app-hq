@@ -1,18 +1,21 @@
-# Paystream on Kubernetes (Week 12)
+# Paystream on Kubernetes (Week 12 + Week 13)
 
-Run the whole app on a local Minikube cluster as Deployments behind Services.
-Images are built locally and loaded into Minikube (no registry needed).
+Run the whole app on a local Minikube cluster. Images are built locally and
+loaded into Minikube (no registry needed).
 
 ## One-time per cluster
 
 ```bash
 minikube start
+minikube addons enable ingress            # Week 13: the Ingress controller
 
-# build the app images and load them into the cluster
 docker build -t paystream-backend:v2 ./backend
 docker build -t paystream-frontend:v2 ./frontend
 minikube image load paystream-backend:v2
 minikube image load paystream-frontend:v2
+
+# map the Ingress host (Week 13):
+echo "$(minikube ip) paystream.local" | sudo tee -a /etc/hosts
 ```
 
 ## Deploy
@@ -20,34 +23,46 @@ minikube image load paystream-frontend:v2
 ```bash
 kubectl apply -f k8s/
 
-# wait for postgres, then load the schema + seed into it:
 kubectl rollout status deploy/paystream-postgres
 kubectl exec -i deploy/paystream-postgres -- psql -U paystream -d paystream < db/schema.sql
 kubectl exec -i deploy/paystream-postgres -- psql -U paystream -d paystream < db/seed.sql
 
-kubectl get pods            # watch them become Ready
-minikube service paystream-web --url   # open the URL it prints
+kubectl get pods
+# open the app via the Ingress:
+open http://paystream.local     # (or just visit it in a browser)
 ```
 
 ## What is here
 
-| File           | Declares                                              |
-|----------------|-------------------------------------------------------|
-| postgres.yaml  | PostgreSQL Deployment + Service (no volume yet)       |
-| redis.yaml     | Redis Deployment + Service                            |
-| api.yaml       | Wallet API Deployment (2 replicas) + Service          |
-| web.yaml       | Frontend Deployment (2 replicas) + NodePort Service   |
+| File           | Declares                                                      |
+|----------------|--------------------------------------------------------------|
+| configmap.yaml | Non-secret config (ports, URLs, TTL) as a ConfigMap          |
+| secret.yaml    | DB password + DATABASE_URL as a Secret (placeholder only)    |
+| postgres.yaml  | PostgreSQL Deployment + Service + a PersistentVolumeClaim     |
+| redis.yaml     | Redis Deployment + Service                                   |
+| api.yaml       | Wallet API Deployment (2 replicas) + Service                 |
+| web.yaml       | Frontend Deployment (2 replicas) + ClusterIP Service         |
+| ingress.yaml   | Ingress front door at http://paystream.local                 |
 
-Service names are DNS names in the cluster: the API reaches the data tier at
-`paystream-postgres` / `paystream-redis`, and the frontend proxies `/api` to the
-`paystream-api` Service. No `localhost` anywhere.
+Config and credentials are externalised: pods read them from the ConfigMap and
+Secret, not from hard-coded values. Postgres now has a volume, so its data
+survives a pod restart.
 
-Not here yet (Week 13): a PersistentVolumeClaim for Postgres, a Secret for the
-database password, a ConfigMap, and an Ingress.
+> The Secret here is base64, which is encoding, not encryption. A real secret is
+> created out-of-band and never committed. Week 18 moves it to AWS Secrets Manager.
+
+## Ship a new version (rolling update)
+
+```bash
+docker build -t paystream-backend:v3 ./backend && minikube image load paystream-backend:v3
+kubectl set image deploy/paystream-api api=paystream-backend:v3
+kubectl rollout status deploy/paystream-api      # watch it replace pods gradually
+kubectl rollout undo deploy/paystream-api        # roll back if needed
+```
 
 ## Tear down
 
 ```bash
-kubectl delete -f k8s/      # remove the app; the cluster stays
-minikube stop               # or: minikube delete  (removes the cluster)
+kubectl delete -f k8s/      # removes the app; the PVC (and its data) is kept unless you delete it
+minikube stop               # or: minikube delete  (removes the cluster and the volume)
 ```

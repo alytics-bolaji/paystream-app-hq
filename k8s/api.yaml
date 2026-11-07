@@ -1,9 +1,10 @@
 # The Paystream wallet API as a Deployment (2 replicas) + Service.
-# The image is built locally and loaded into minikube:
+# Images are built locally and loaded into minikube:
 #   docker build -t paystream-backend:v2 ./backend
 #   minikube image load paystream-backend:v2
-# imagePullPolicy: IfNotPresent tells Kubernetes to use that loaded image
-# instead of trying to pull it from a registry.
+# Week 13: configuration now comes from the ConfigMap, and the one value that
+# carries a password (DATABASE_URL) comes from the Secret -- nothing sensitive
+# or environment-specific is hard-coded in this file any more.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,19 +25,15 @@ spec:
         - name: api
           image: paystream-backend:v2
           imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: paystream-config     # PORT, REDIS_URL, CACHE_TTL, CORS_ORIGIN
           env:
-            - name: PORT
-              value: "3000"
-            # service names are DNS names in the cluster, so the data tier is
-            # reached at paystream-postgres / paystream-redis, not localhost.
-            - name: DATABASE_URL
-              value: postgres://paystream:paystream@paystream-postgres:5432/paystream
-            - name: REDIS_URL
-              value: redis://paystream-redis:6379
-            - name: CACHE_TTL
-              value: "60"
-            - name: CORS_ORIGIN
-              value: "*"
+            - name: DATABASE_URL           # the only value with a password -> from the Secret
+              valueFrom:
+                secretKeyRef:
+                  name: paystream-secrets
+                  key: DATABASE_URL
           ports:
             - containerPort: 3000
           readinessProbe:

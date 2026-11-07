@@ -1,7 +1,16 @@
-# PostgreSQL as a Deployment + Service.
-# NOTE: no persistent volume here, so data is lost if the pod restarts.
-# Week 13 adds a PersistentVolumeClaim. The password is in plain text for now;
-# Week 13 moves it into a Secret (that is the Week 13 incident, on purpose).
+# PostgreSQL, now with persistence and externalised config (Week 13):
+#   - a PersistentVolumeClaim so wallet data survives a pod restart
+#   - user/db from the ConfigMap, password from the Secret
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: paystream-pgdata
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -10,6 +19,8 @@ metadata:
     app: paystream-postgres
 spec:
   replicas: 1
+  strategy:
+    type: Recreate          # one DB pod on one volume: replace it, never run two at once
   selector:
     matchLabels:
       app: paystream-postgres
@@ -23,18 +34,36 @@ spec:
           image: postgres:16
           env:
             - name: POSTGRES_USER
-              value: paystream
-            - name: POSTGRES_PASSWORD
-              value: paystream
+              valueFrom:
+                configMapKeyRef:
+                  name: paystream-config
+                  key: POSTGRES_USER
             - name: POSTGRES_DB
-              value: paystream
+              valueFrom:
+                configMapKeyRef:
+                  name: paystream-config
+                  key: POSTGRES_DB
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: paystream-secrets
+                  key: POSTGRES_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
           ports:
             - containerPort: 5432
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
           readinessProbe:
             exec:
               command: ["pg_isready", "-U", "paystream"]
             initialDelaySeconds: 5
             periodSeconds: 5
+      volumes:
+        - name: pgdata
+          persistentVolumeClaim:
+            claimName: paystream-pgdata
 ---
 apiVersion: v1
 kind: Service

@@ -1,0 +1,21 @@
+# Ingress: one clean front door for the app, replacing the raw NodePort.
+# On Minikube, first enable the ingress controller and map the host:
+#   minikube addons enable ingress
+#   echo "$(minikube ip) paystream.local" | sudo tee -a /etc/hosts
+# then open http://paystream.local
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: paystream
+spec:
+  rules:
+    - host: paystream.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: paystream-web
+                port:
+                  number: 80

@@ -1,11 +1,6 @@
-# The Paystream frontend (Nginx) as a Deployment (2 replicas) + NodePort Service.
-# Build and load like the API:
-#   docker build -t paystream-frontend:v2 ./frontend
-#   minikube image load paystream-frontend:v2
-# Nginx inside the image proxies /api to the paystream-api Service by name.
-# A NodePort exposes the app to your machine; reach it with:
-#   minikube service paystream-web --url
-# (Ingress comes in Week 13.)
+# The Paystream frontend (Nginx) as a Deployment (2 replicas) + Service.
+# Week 13: the Service is now ClusterIP, because the Ingress (ingress.yaml) is
+# the front door. Nginx inside the image still proxies /api to paystream-api.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -40,10 +35,8 @@ kind: Service
 metadata:
   name: paystream-web
 spec:
-  type: NodePort
   selector:
     app: paystream-web
   ports:
     - port: 80
       targetPort: 80
-      nodePort: 30080
