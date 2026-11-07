@@ -1,77 +1,78 @@
-# PostgreSQL, now with persistence and externalised config (Week 13):
-#   - a PersistentVolumeClaim so wallet data survives a pod restart
-#   - user/db from the ConfigMap, password from the Secret
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: paystream-pgdata
-spec:
-  accessModes: ["ReadWriteOnce"]
-  resources:
-    requests:
-      storage: 1Gi
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: paystream-postgres
-  labels:
-    app: paystream-postgres
-spec:
-  replicas: 1
-  strategy:
-    type: Recreate          # one DB pod on one volume: replace it, never run two at once
-  selector:
-    matchLabels:
-      app: paystream-postgres
-  template:
-    metadata:
-      labels:
-        app: paystream-postgres
-    spec:
-      containers:
-        - name: postgres
-          image: postgres:16
-          env:
-            - name: POSTGRES_USER
-              valueFrom:
-                configMapKeyRef:
-                  name: paystream-config
-                  key: POSTGRES_USER
-            - name: POSTGRES_DB
-              valueFrom:
-                configMapKeyRef:
-                  name: paystream-config
-                  key: POSTGRES_DB
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: paystream-secrets
-                  key: POSTGRES_PASSWORD
-            - name: PGDATA
-              value: /var/lib/postgresql/data/pgdata
-          ports:
-            - containerPort: 5432
-          volumeMounts:
-            - name: pgdata
-              mountPath: /var/lib/postgresql/data
-          readinessProbe:
-            exec:
-              command: ["pg_isready", "-U", "paystream"]
-            initialDelaySeconds: 5
-            periodSeconds: 5
-      volumes:
-        - name: pgdata
-          persistentVolumeClaim:
-            claimName: paystream-pgdata
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: paystream-postgres
-spec:
-  selector:
-    app: paystream-postgres
-  ports:
-    - port: 5432
-      targetPort: 5432
+# postgres.yaml -- the database, in three objects:
+#   1) a PersistentVolumeClaim (durable storage), 2) the Deployment (the pod),
+#   3) a Service (a stable in-cluster address). The volume is what makes the
+#   data survive a pod restart.
+apiVersion: v1                            # core API version, for the PersistentVolumeClaim below
+kind: PersistentVolumeClaim               # object type: a request for a piece of durable storage
+metadata:                                 # identifying information for the claim
+  name: paystream-pgdata                  # the claim's name; the pod mounts it by this name
+spec:                                     # what kind of storage is being requested
+  accessModes: ["ReadWriteOnce"]          # ReadWriteOnce = one node may mount it read/write at a time
+  resources:                              # the resources the claim needs
+    requests:                             # the minimum amounts requested
+      storage: 1Gi                        # ask for 1 gibibyte of disk
+---                                       # separates the claim from the Deployment below
+apiVersion: apps/v1                       # Deployments live in the "apps" API group, version v1
+kind: Deployment                          # object type: a Deployment (keeps the pod running)
+metadata:                                 # identifying information for the Deployment
+  name: paystream-postgres                # the Deployment's name
+  labels:                                 # tags on the Deployment object itself
+    app: paystream-postgres               # a label marking this as the postgres app
+spec:                                     # the desired state of the Deployment
+  replicas: 1                             # run exactly one Postgres pod (a database is not casually scaled out)
+  strategy:                               # how to replace pods when the Deployment changes
+    type: Recreate                        # stop the old pod BEFORE starting the new one, so two never share the volume
+  selector:                               # how the Deployment finds the pods it owns
+    matchLabels:                          # it owns pods whose labels match these
+      app: paystream-postgres             # ...pods labelled app=paystream-postgres
+  template:                               # the blueprint for the pod this Deployment creates
+    metadata:                             # metadata applied to the pod
+      labels:                             # labels stamped on the pod
+        app: paystream-postgres           # must match the selector above so the Deployment claims the pod
+    spec:                                 # the pod's specification
+      containers:                         # the containers in the pod
+        - name: postgres                  # a name for this container within the pod
+          image: postgres:16              # the image to run: official PostgreSQL, version 16
+          env:                            # environment variables passed into the container
+            - name: POSTGRES_USER         # the DB username variable the postgres image reads
+              valueFrom:                  # ...its value comes from elsewhere, not written inline
+                configMapKeyRef:          # ...specifically from a key in a ConfigMap
+                  name: paystream-config  # the ConfigMap to read from
+                  key: POSTGRES_USER      # the key within that ConfigMap
+            - name: POSTGRES_DB           # the database-name variable
+              valueFrom:                  # value sourced externally
+                configMapKeyRef:          # from a ConfigMap
+                  name: paystream-config  # the ConfigMap
+                  key: POSTGRES_DB        # the key to read
+            - name: POSTGRES_PASSWORD     # the database password variable
+              valueFrom:                  # value sourced externally
+                secretKeyRef:             # from a Secret (because it is sensitive)
+                  name: paystream-secrets # the Secret to read from
+                  key: POSTGRES_PASSWORD  # the key within that Secret
+            - name: PGDATA                # tells Postgres where to put its data files
+              value: /var/lib/postgresql/data/pgdata  # a SUBfolder of the mounted volume (avoids mount-root issues)
+          ports:                          # ports the container exposes
+            - containerPort: 5432         # Postgres listens on 5432 inside the pod
+          volumeMounts:                   # where to attach volumes inside this container
+            - name: pgdata                # the volume (defined under 'volumes' below) to attach
+              mountPath: /var/lib/postgresql/data  # attach it at Postgres's data directory
+          readinessProbe:                 # how Kubernetes checks the pod is ready for traffic
+            exec:                         # run a command inside the container to check
+              command: ["pg_isready", "-U", "paystream"]  # pg_isready succeeds once Postgres accepts connections
+            initialDelaySeconds: 5        # wait 5s after start before the first check
+            periodSeconds: 5              # then check every 5s
+      volumes:                            # volumes made available to the pod
+        - name: pgdata                    # the volume's name (referenced by volumeMounts above)
+          persistentVolumeClaim:          # this volume is backed by a PersistentVolumeClaim
+            claimName: paystream-pgdata   # ...the claim defined at the top of this file
+---                                       # separates the Deployment from the Service below
+apiVersion: v1                            # Services are core objects, version v1
+kind: Service                             # object type: a Service (stable name + load balancing)
+metadata:                                 # identifying information for the Service
+  name: paystream-postgres                # the Service name = the DNS hostname the API uses ("paystream-postgres")
+spec:                                     # the Service's desired behaviour
+  selector:                               # which pods this Service sends traffic to
+    app: paystream-postgres               # ...pods labelled app=paystream-postgres
+  ports:                                  # the ports the Service exposes
+    - port: 5432                          # the port the Service itself listens on
+      targetPort: 5432                    # the port on the pod to forward that traffic to

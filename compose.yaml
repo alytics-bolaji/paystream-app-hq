@@ -1,4 +1,4 @@
-# compose.yaml -- the whole of Paystream as one stack.
+# compose.yaml -- the whole of Paystream as one stack (Docker Compose).
 #
 # Bring it all up:        docker compose up --build        (add -d for background)
 # Take it all down:       docker compose down              (add -v to drop the volume)
@@ -7,70 +7,71 @@
 # Service NAMES are hostnames on the compose network, so the API reaches the
 # database at paystream-postgres and the cache at paystream-redis, and the
 # frontend's nginx.conf proxies /api to paystream-api -- no localhost anywhere.
-name: paystream
+name: paystream                           # the project name; Compose prefixes the network and volume with it
 
-services:
-  paystream-postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: paystream
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-paystream}
-      POSTGRES_DB: paystream
-    volumes:
-      - paystream-pgdata:/var/lib/postgresql/data
+services:                                 # the containers that make up the app (one block per service)
+
+  paystream-postgres:                     # the database service (this name is also its hostname on the network)
+    image: postgres:16                    # run the official PostgreSQL 16 image (pulled from Docker Hub)
+    environment:                          # environment variables passed into the container
+      POSTGRES_USER: paystream            # the database username to create
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-paystream}  # password from .env, defaulting to "paystream" if unset
+      POSTGRES_DB: paystream              # the database to create on first start
+    volumes:                              # storage and files mounted into the container
+      - paystream-pgdata:/var/lib/postgresql/data          # a named volume for the data, so it survives restarts
       # schema + seed load automatically on FIRST start (empty volume only):
-      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ./db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U paystream"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
-    restart: unless-stopped
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro  # mount schema.sql into the init folder, read-only
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro      # mount seed.sql too (the 01/02 prefix sets the order)
+    healthcheck:                          # how Compose decides this service is "healthy"
+      test: ["CMD-SHELL", "pg_isready -U paystream"]  # run pg_isready; success means Postgres accepts connections
+      interval: 5s                        # run the check every 5 seconds
+      timeout: 3s                         # a single check fails if it takes longer than 3s
+      retries: 12                         # mark unhealthy only after 12 failures in a row
+    restart: unless-stopped               # restart automatically unless you stopped it yourself
 
-  paystream-redis:
-    image: redis:7
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
-    restart: unless-stopped
+  paystream-redis:                        # the cache service (hostname: paystream-redis)
+    image: redis:7                        # run the official Redis 7 image
+    healthcheck:                          # health check for Redis
+      test: ["CMD", "redis-cli", "ping"]  # run redis-cli ping; a PONG reply means it is up
+      interval: 5s                        # check every 5 seconds
+      timeout: 3s                         # fail a check that takes over 3s
+      retries: 12                         # unhealthy after 12 failures in a row
+    restart: unless-stopped               # auto-restart unless manually stopped
 
-  paystream-api:
-    build: ./backend
+  paystream-api:                          # the Node API service (hostname: paystream-api)
+    build: ./backend                      # build this image from the Dockerfile in ./backend
     # the name this image is published under on Docker Hub (see .env.example):
-    image: ${DOCKERHUB_USER:-youruser}/paystream-backend:${TAG:-latest}
-    #image: paystream-backend:v2
-    environment:
-      PORT: 3000
-      DATABASE_URL: postgres://paystream:${POSTGRES_PASSWORD:-paystream}@paystream-postgres:5432/paystream
-      REDIS_URL: redis://paystream-redis:6379
-      CACHE_TTL: 60
-      CORS_ORIGIN: "*"
-    depends_on:
-      paystream-postgres:
-        condition: service_healthy
-      paystream-redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
-      start_period: 5s
-    restart: unless-stopped
+    image: ${DOCKERHUB_USER:-youruser}/paystream-backend:${TAG:-latest}  # name/tag for the built image (used by compose push/pull)
+    #image: paystream-backend:v2          # (alternative: a purely local image name, if you are not using Docker Hub)
+    environment:                          # environment variables for the API
+      PORT: 3000                          # the port the API listens on
+      DATABASE_URL: postgres://paystream:${POSTGRES_PASSWORD:-paystream}@paystream-postgres:5432/paystream  # DB connection; host is the service name
+      REDIS_URL: redis://paystream-redis:6379  # Redis connection; host is the redis service name
+      CACHE_TTL: 60                       # how long (seconds) a cached balance stays fresh
+      CORS_ORIGIN: "*"                    # which browser origins may call the API ("*" = any)
+    depends_on:                           # start ordering: wait for these before starting the API
+      paystream-postgres:                 # depends on the database...
+        condition: service_healthy        # ...and only once it reports HEALTHY, not merely started
+      paystream-redis:                    # depends on the cache...
+        condition: service_healthy        # ...also waiting for healthy
+    healthcheck:                          # health check for the API itself
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]  # fetch /health inside the container; failure if not reachable
+      interval: 5s                        # check every 5 seconds
+      timeout: 3s                         # fail a check over 3s
+      retries: 12                         # unhealthy after 12 failures
+      start_period: 5s                    # grace window after start where failures don't count (the app is still booting)
+    restart: unless-stopped               # auto-restart unless manually stopped
 
-  paystream-web:
-    build: ./frontend
-    image: ${DOCKERHUB_USER:-youruser}/paystream-frontend:${TAG:-latest}
-    #image: paystream-frontend:v2
-    ports:
-      - "8080:80"
-    depends_on:
-      paystream-api:
-        condition: service_healthy
-    restart: unless-stopped
+  paystream-web:                          # the frontend service (Nginx; hostname: paystream-web)
+    build: ./frontend                     # build this image from the Dockerfile in ./frontend
+    image: ${DOCKERHUB_USER:-youruser}/paystream-frontend:${TAG:-latest}  # name/tag for the built image (used by compose push/pull)
+    #image: paystream-frontend:v2         # (alternative: a purely local image name)
+    ports:                                # publish a container port to your machine
+      - "8080:80"                         # map localhost:8080 (left) to the container's port 80 (right); the only exposed tier
+    depends_on:                           # start ordering
+      paystream-api:                      # wait for the API...
+        condition: service_healthy        # ...to be healthy before starting the frontend
+    restart: unless-stopped               # auto-restart unless manually stopped
 
-volumes:
-  paystream-pgdata:
+volumes:                                  # named volumes managed by Compose
+  paystream-pgdata:                       # the Postgres data volume (declared here so Compose creates it)

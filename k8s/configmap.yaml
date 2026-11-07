@@ -1,14 +1,13 @@
-# ConfigMap: the NON-secret configuration, separated from the images and pods.
-# Change a value here and re-apply, and you reconfigure the app without
-# rebuilding any image.
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: paystream-config
-data:
-  POSTGRES_USER: paystream
-  POSTGRES_DB: paystream
-  PORT: "3000"
-  REDIS_URL: redis://paystream-redis:6379
-  CACHE_TTL: "60"
-  CORS_ORIGIN: "*"
+# configmap.yaml -- NON-secret settings the app reads at runtime.
+# Change a value here and re-apply to reconfigure the app without rebuilding an image.
+apiVersion: v1                            # which Kubernetes API this object uses; core objects like ConfigMap are "v1"
+kind: ConfigMap                           # the object type: a ConfigMap (a named bag of key/value configuration)
+metadata:                                 # information that identifies this object
+  name: paystream-config                  # the name other files use to refer to this ConfigMap
+data:                                     # the configuration itself, as key/value pairs (every value is text)
+  POSTGRES_USER: paystream                # the database username the API and Postgres share
+  POSTGRES_DB: paystream                  # the name of the database to connect to
+  PORT: "3000"                            # the port the API listens on (quoted so YAML keeps it text, not a number)
+  REDIS_URL: redis://paystream-redis:6379 # how the API reaches Redis: the redis Service name and its port
+  CACHE_TTL: "60"                         # how long, in seconds, a cached balance stays fresh
+  CORS_ORIGIN: "*"                        # which web origins may call the API ("*" = any; tighten in production)

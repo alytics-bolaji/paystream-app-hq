@@ -1,61 +1,60 @@
-# The Paystream wallet API as a Deployment (2 replicas) + Service.
-# Images are built locally and loaded into minikube:
+# api.yaml -- the wallet API: a Deployment (2 copies) and a Service.
+# The image is built locally and loaded into minikube:
 #   docker build -t paystream-backend:v2 ./backend
 #   minikube image load paystream-backend:v2
-# Week 13: configuration now comes from the ConfigMap, and the one value that
-# carries a password (DATABASE_URL) comes from the Secret -- nothing sensitive
-# or environment-specific is hard-coded in this file any more.
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: paystream-api
-  labels:
-    app: paystream-api
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: paystream-api
-  template:
-    metadata:
-      labels:
-        app: paystream-api
-    spec:
-      containers:
-        - name: api
-          image: paystream-backend:v2
-          imagePullPolicy: IfNotPresent
-          envFrom:
-            - configMapRef:
-                name: paystream-config     # PORT, REDIS_URL, CACHE_TTL, CORS_ORIGIN
-          env:
-            - name: DATABASE_URL           # the only value with a password -> from the Secret
-              valueFrom:
-                secretKeyRef:
-                  name: paystream-secrets
-                  key: DATABASE_URL
-          ports:
-            - containerPort: 3000
-          readinessProbe:
-            httpGet:
-              path: /ready
-              port: 3000
-            initialDelaySeconds: 5
-            periodSeconds: 5
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 3000
-            initialDelaySeconds: 10
-            periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: paystream-api
-spec:
-  selector:
-    app: paystream-api
-  ports:
-    - port: 3000
-      targetPort: 3000
+# Config comes from the ConfigMap; the one value with a password (DATABASE_URL)
+# comes from the Secret, so nothing sensitive is hard-coded in this file.
+apiVersion: apps/v1                       # Deployments live in the "apps" API group, version v1
+kind: Deployment                          # object type: a Deployment (keeps a set of identical pods running)
+metadata:                                 # identifying information for the Deployment
+  name: paystream-api                     # the Deployment's name
+  labels:                                 # tags on the Deployment object itself
+    app: paystream-api                    # a label marking this as the api app
+spec:                                     # the desired state of the Deployment
+  replicas: 2                             # run TWO API pods, so losing one never takes the API down
+  selector:                               # how the Deployment finds the pods it owns
+    matchLabels:                          # it owns pods whose labels match these
+      app: paystream-api                  # ...pods labelled app=paystream-api
+  template:                               # the blueprint for the pods this Deployment creates
+    metadata:                             # metadata applied to each pod
+      labels:                             # labels stamped on each pod
+        app: paystream-api                # must match the selector above so the Deployment claims these pods
+    spec:                                 # the pod's specification
+      containers:                         # the containers in the pod
+        - name: api                       # a name for this container within the pod
+          image: paystream-backend:v2     # the locally-built API image to run
+          imagePullPolicy: IfNotPresent   # use the image already loaded in the cluster; don't try to pull from a registry
+          envFrom:                        # import a whole set of env vars at once...
+            - configMapRef:               # ...from a ConfigMap
+                name: paystream-config    # pulls in PORT, REDIS_URL, CACHE_TTL, CORS_ORIGIN (plus unused keys, harmless)
+          env:                            # individual env vars (added on top of envFrom)
+            - name: DATABASE_URL          # the one value that contains a password
+              valueFrom:                  # ...sourced externally, not written inline
+                secretKeyRef:             # ...from a Secret
+                  name: paystream-secrets # the Secret to read from
+                  key: DATABASE_URL       # the key within that Secret
+          ports:                          # ports the container exposes
+            - containerPort: 3000         # the API listens on 3000 inside the pod
+          readinessProbe:                 # is this pod ready to RECEIVE traffic? (Service only sends to ready pods)
+            httpGet:                      # check by making an HTTP request
+              path: /ready                # GET /ready (the app returns ok only when DB + cache are reachable)
+              port: 3000                  # on port 3000
+            initialDelaySeconds: 5        # wait 5s after start before the first check
+            periodSeconds: 5              # then check every 5s
+          livenessProbe:                  # is this pod still ALIVE? (if not, Kubernetes restarts it)
+            httpGet:                      # check by making an HTTP request
+              path: /health               # GET /health (a simple "the process is up" check)
+              port: 3000                  # on port 3000
+            initialDelaySeconds: 10       # wait 10s after start before the first check
+            periodSeconds: 10             # then check every 10s
+---                                       # separates the Deployment from the Service below
+apiVersion: v1                            # Services are core objects, version v1
+kind: Service                             # object type: a Service (stable name + load balancing over the 2 pods)
+metadata:                                 # identifying information for the Service
+  name: paystream-api                     # the Service name = the DNS hostname the frontend proxies to ("paystream-api")
+spec:                                     # the Service's desired behaviour
+  selector:                               # which pods this Service sends traffic to
+    app: paystream-api                    # ...pods labelled app=paystream-api (both replicas)
+  ports:                                  # the ports the Service exposes
+    - port: 3000                          # the port the Service itself listens on
+      targetPort: 3000                    # the port on the pods to forward that traffic to

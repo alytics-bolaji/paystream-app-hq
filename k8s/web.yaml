@@ -1,42 +1,42 @@
-# The Paystream frontend (Nginx) as a Deployment (2 replicas) + Service.
-# Week 13: the Service is now ClusterIP, because the Ingress (ingress.yaml) is
-# the front door. Nginx inside the image still proxies /api to paystream-api.
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: paystream-web
-  labels:
-    app: paystream-web
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: paystream-web
-  template:
-    metadata:
-      labels:
-        app: paystream-web
-    spec:
-      containers:
-        - name: web
-          image: paystream-frontend:v2
-          imagePullPolicy: IfNotPresent
-          ports:
-            - containerPort: 80
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 80
-            initialDelaySeconds: 3
-            periodSeconds: 5
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: paystream-web
-spec:
-  selector:
-    app: paystream-web
-  ports:
-    - port: 80
-      targetPort: 80
+# web.yaml -- the frontend (Nginx): a Deployment (2 copies) and a Service.
+# The Service is ClusterIP (internal only) because the Ingress (ingress.yaml) is
+# now the front door. Nginx inside the image proxies /api to the paystream-api Service.
+apiVersion: apps/v1                       # Deployments live in the "apps" API group, version v1
+kind: Deployment                          # object type: a Deployment (keeps a set of identical pods running)
+metadata:                                 # identifying information for the Deployment
+  name: paystream-web                     # the Deployment's name
+  labels:                                 # tags on the Deployment object itself
+    app: paystream-web                    # a label marking this as the web app
+spec:                                     # the desired state of the Deployment
+  replicas: 2                             # run TWO frontend pods, so a rolling update always keeps one serving
+  selector:                               # how the Deployment finds the pods it owns
+    matchLabels:                          # it owns pods whose labels match these
+      app: paystream-web                  # ...pods labelled app=paystream-web
+  template:                               # the blueprint for the pods this Deployment creates
+    metadata:                             # metadata applied to each pod
+      labels:                             # labels stamped on each pod
+        app: paystream-web                # must match the selector above so the Deployment claims these pods
+    spec:                                 # the pod's specification
+      containers:                         # the containers in the pod
+        - name: web                       # a name for this container within the pod
+          image: paystream-frontend:v2    # the locally-built frontend image to run
+          imagePullPolicy: IfNotPresent   # use the image already loaded in the cluster; don't pull from a registry
+          ports:                          # ports the container exposes
+            - containerPort: 80           # Nginx listens on 80 inside the pod
+          readinessProbe:                 # is this pod ready to receive traffic?
+            httpGet:                      # check by making an HTTP request
+              path: /                     # GET / (the homepage)
+              port: 80                    # on port 80
+            initialDelaySeconds: 3        # wait 3s after start before the first check
+            periodSeconds: 5              # then check every 5s
+---                                       # separates the Deployment from the Service below
+apiVersion: v1                            # Services are core objects, version v1
+kind: Service                             # object type: a Service
+metadata:                                 # identifying information for the Service
+  name: paystream-web                     # the Service name; the Ingress routes to this name
+spec:                                     # the Service's desired behaviour
+  selector:                               # which pods this Service sends traffic to
+    app: paystream-web                    # ...pods labelled app=paystream-web (both replicas)
+  ports:                                  # the ports the Service exposes
+    - port: 80                            # the port the Service itself listens on
+      targetPort: 80                      # the port on the pods to forward that traffic to
