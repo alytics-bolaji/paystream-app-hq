@@ -1,0 +1,11 @@
+# values-prod.yaml -- PRODUCTION overrides. More replicas, real host, bigger disk.
+# helm upgrade --install paystream ./helm/paystream -f helm/paystream/values-prod.yaml
+replicas:
+  api: 3
+  web: 2
+ingress:
+  host: paystream.ke
+db:
+  storage: 5Gi
+api:
+  corsOrigin: "https://paystream.ke"

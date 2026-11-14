@@ -1,0 +1,12 @@
+# Non-secret config; values come from the chart's values.yaml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: paystream-config
+data:
+  POSTGRES_USER: {{ .Values.db.user | quote }}
+  POSTGRES_DB: {{ .Values.db.name | quote }}
+  PORT: {{ .Values.api.port | quote }}
+  REDIS_URL: {{ .Values.cache.url | quote }}
+  CACHE_TTL: {{ .Values.api.cacheTtl | quote }}
+  CORS_ORIGIN: {{ .Values.api.corsOrigin | quote }}

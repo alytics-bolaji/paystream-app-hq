@@ -1,0 +1,11 @@
+# values-dev.yaml -- DEVELOPMENT overrides. Small, permissive, local host.
+# helm upgrade --install paystream ./helm/paystream -f helm/paystream/values-dev.yaml
+replicas:
+  api: 1
+  web: 1
+ingress:
+  host: paystream.local
+db:
+  storage: 1Gi
+api:
+  corsOrigin: "*"

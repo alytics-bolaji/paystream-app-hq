@@ -1,7 +1,7 @@
 # ingress.yaml -- one clean HTTP front door for the app, replacing the raw NodePort.
 # On Minikube, first turn on the controller and map the host once:
 #   minikube addons enable ingress
-#   echo "$(minikube ip) paystream.local" | sudo tee -a /etc/hosts
+#   echo "$(minikube ip) paystream.local" | sudo tee -a /etc/hosts   (Windows: run tunnel, map 127.0.0.1)
 # then open http://paystream.local
 apiVersion: networking.k8s.io/v1          # Ingress lives in the "networking.k8s.io" API group, version v1
 kind: Ingress                             # object type: an Ingress (HTTP routing into the cluster)

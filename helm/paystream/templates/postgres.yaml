@@ -1,0 +1,76 @@
+# The database. Storage size from values; user/db from the ConfigMap and the
+# password from the Secret.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: paystream-pgdata
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ .Values.db.storage | quote }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paystream-postgres
+  labels:
+    app: paystream-postgres
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: paystream-postgres
+  template:
+    metadata:
+      labels:
+        app: paystream-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: paystream-config
+                  key: POSTGRES_USER
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: paystream-config
+                  key: POSTGRES_DB
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: paystream-secrets
+                  key: POSTGRES_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "paystream"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: pgdata
+          persistentVolumeClaim:
+            claimName: paystream-pgdata
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: paystream-postgres
+spec:
+  selector:
+    app: paystream-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

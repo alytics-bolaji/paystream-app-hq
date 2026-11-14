@@ -1,0 +1,56 @@
+# The wallet API. Replicas and image from values; config from the ConfigMap and
+# the password-bearing DATABASE_URL from the Secret.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paystream-api
+  labels:
+    app: paystream-api
+spec:
+  replicas: {{ .Values.replicas.api }}
+  selector:
+    matchLabels:
+      app: paystream-api
+  template:
+    metadata:
+      labels:
+        app: paystream-api
+    spec:
+      containers:
+        - name: api
+          image: "{{ .Values.image.api.repository }}:{{ .Values.image.api.tag }}"
+          imagePullPolicy: {{ .Values.image.api.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: paystream-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: paystream-secrets
+                  key: DATABASE_URL
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: paystream-api
+spec:
+  selector:
+    app: paystream-api
+  ports:
+    - port: 3000
+      targetPort: 3000

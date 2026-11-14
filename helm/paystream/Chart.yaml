@@ -1,0 +1,6 @@
+apiVersion: v2                 # Helm chart API version (v2 = Helm 3)
+name: paystream                # the chart's name
+description: The Paystream wallet app (frontend, API, PostgreSQL, Redis) as one chart.
+type: application              # an application chart (not a library)
+version: 0.1.0                 # the CHART version (bump when the templates change)
+appVersion: "2.0"             # the version of the APP the chart deploys (informational)

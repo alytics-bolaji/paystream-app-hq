@@ -1,0 +1,12 @@
+Paystream has been deployed as release "{{ .Release.Name }}".
+
+Check the pods:
+  kubectl get pods
+
+Load the database the first time (from the repo root):
+  kubectl rollout status deploy/paystream-postgres
+  kubectl exec -i deploy/paystream-postgres -- psql -U paystream -d paystream < db/schema.sql
+  kubectl exec -i deploy/paystream-postgres -- psql -U paystream -d paystream < db/seed.sql
+
+Reach the app at the Ingress host: http://{{ .Values.ingress.host }}
+(or: kubectl port-forward -n ingress-nginx service/ingress-nginx-controller 8080:80)

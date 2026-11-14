@@ -1,0 +1,34 @@
+# values.yaml -- the DEFAULT configuration for the chart.
+# Override per environment with -f values-dev.yaml / -f values-prod.yaml,
+# or one value at a time with --set (e.g. --set replicas.api=4).
+
+image:
+  api:
+    repository: paystream-backend   # the API image name (built locally, loaded into minikube)
+    tag: v2                         # the image tag to deploy
+    pullPolicy: IfNotPresent        # use the loaded image; don't pull from a registry
+  web:
+    repository: paystream-frontend  # the frontend image name
+    tag: v2                         # the image tag
+    pullPolicy: IfNotPresent        # use the loaded image
+
+replicas:
+  api: 2                            # how many API pods to run
+  web: 2                            # how many frontend pods to run
+
+db:
+  user: paystream                   # database username
+  name: paystream                   # database name
+  password: paystream               # DEV ONLY. In prod pass with --set or a secret manager.
+  storage: 1Gi                      # size of the database's PersistentVolumeClaim
+
+api:
+  port: 3000                        # the port the API listens on
+  cacheTtl: "60"                    # cached-balance freshness, in seconds
+  corsOrigin: "*"                   # which browser origins may call the API
+
+cache:
+  url: redis://paystream-redis:6379 # how the API reaches Redis (the Service name)
+
+ingress:
+  host: paystream.local             # the host name the Ingress routes to
