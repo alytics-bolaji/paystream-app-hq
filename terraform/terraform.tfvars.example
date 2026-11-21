@@ -1,0 +1,5 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
+region        = "eu-west-1"
+instance_type = "t3.micro"
+key_name      = "your-ec2-key-pair-name"   # must already exist in this region
+my_ip         = "1.2.3.4/32"               # your public IP (see the lab for how to find it)

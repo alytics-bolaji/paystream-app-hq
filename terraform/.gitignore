@@ -1,0 +1,8 @@
+# Terraform -- never commit state (it can contain secrets) or local plugins.
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+# your real variable values (keep the .example)
+terraform.tfvars
